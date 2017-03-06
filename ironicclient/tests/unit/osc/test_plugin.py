@@ -23,8 +23,9 @@ from ironicclient.v1 import client
 
 class MakeClientTest(testtools.TestCase):
 
+    @mock.patch.object(plugin.LOG, 'warning', autospec=True)
     @mock.patch.object(client, 'Client', autospec=True)
-    def test_make_client(self, mock_client):
+    def test_make_client(self, mock_client, mock_warning):
         instance = fakes.FakeClientManager()
         instance.get_endpoint_for_service_type = mock.Mock(
             return_value='endpoint')
@@ -33,10 +34,30 @@ class MakeClientTest(testtools.TestCase):
                                             session=instance.session,
                                             region_name=instance._region_name,
                                             endpoint='endpoint')
+        # Warning should only be logged if default ironic API version is used
+        self.assertFalse(mock_warning.called)
         instance.get_endpoint_for_service_type.assert_called_once_with(
             'baremetal', region_name=instance._region_name,
             interface=instance.interface)
 
+    @mock.patch.object(plugin.LOG, 'warning', autospec=True)
+    @mock.patch.object(client, 'Client', autospec=True)
+    def test_make_client_log_warning_no_version_specified(self, mock_client,
+                                                          mock_warning):
+        instance = fakes.FakeClientManager()
+        instance.get_endpoint_for_service_type = mock.Mock(
+            return_value='endpoint')
+        instance._api_version = {'baremetal': http.DEFAULT_VER}
+        plugin.make_client(instance)
+        mock_client.assert_called_once_with(
+            os_ironic_api_version=http.DEFAULT_VER,
+            session=instance.session,
+            region_name=instance._region_name,
+            endpoint='endpoint')
+        self.assertTrue(mock_warning.called)
+        instance.get_endpoint_for_service_type.assert_called_once_with(
+            'baremetal', region_name=instance._region_name,
+            interface=instance.interface)
 
 class BuildOptionParserTest(testtools.TestCase):
 
